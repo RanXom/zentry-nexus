@@ -26,6 +26,11 @@ apiClient.interceptors.response.use(
     async (error) => {
         const originalRequest = error.config;
 
+        // Handle Rate Limiting
+        if (error.response?.status === 429) {
+            return Promise.reject(new Error('Rate limit exceeded. Please wait a moment before trying again.'));
+        }
+
         // If it's a 401 or 403 and we haven't already retried
         if ((error.response?.status === 401 || error.response?.status === 403) && !originalRequest._retry) {
             originalRequest._retry = true;

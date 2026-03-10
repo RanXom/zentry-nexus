@@ -3,16 +3,56 @@
 import * as React from 'react';
 import { useAuth } from '@/store/useAuth';
 import { motion } from 'framer-motion';
-import { ShieldCheck, Server, Key, Terminal, UserSquare2 } from 'lucide-react';
+import { ShieldCheck, Server, Key, Terminal, UserSquare2, Search, Users, Loader2 } from 'lucide-react';
+import { apiClient } from '@/lib/api-client';
 
 export default function DashboardOverview() {
     const { user, fetchMe } = useAuth();
+    const [usersList, setUsersList] = React.useState<any[]>([]);
+    const [searchQuery, setSearchQuery] = React.useState('');
+    const [isLoadingUsers, setIsLoadingUsers] = React.useState(false);
+
+    const isAdmin = React.useMemo(() => {
+        return user?.roles?.some((role: any) => {
+            const roleName = typeof role === 'object' ? role.name : role;
+            return roleName === 'ADMIN' || roleName === 'ROLE_ADMIN';
+        });
+    }, [user]);
 
     React.useEffect(() => {
         if (!user) {
             fetchMe();
         }
     }, [user, fetchMe]);
+    const fetchUsersList = React.useCallback(async () => {
+        setIsLoadingUsers(true);
+        try {
+            const res = await apiClient.get('/admin/users');
+            setUsersList(res.data || []);
+        } catch (e) {
+            console.error('Failed to fetch users', e);
+        } finally {
+            setIsLoadingUsers(false);
+        }
+    }, []);
+
+    React.useEffect(() => {
+        if (isAdmin) {
+            fetchUsersList();
+        }
+    }, [isAdmin, fetchUsersList]);
+
+    const handleToggleLock = async (userId: string, currentStatus: boolean) => {
+        try {
+            await apiClient.patch(`/admin/users/${userId}/toggle-lock`);
+            // Optimistically update the UI instead of re-fetching everything
+            setUsersList(prev => prev.map(u =>
+                u.id === userId ? { ...u, accountLocked: !currentStatus } : u
+            ));
+        } catch (e: any) {
+            alert(e.message || 'Failed to toggle lock status. You may be rate limited.');
+        }
+    };
 
     if (!user) {
         return (
@@ -26,6 +66,11 @@ export default function DashboardOverview() {
             </div>
         );
     }
+
+    const filteredUsers = usersList.filter(u =>
+        u.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (u.email && u.email.toLowerCase().includes(searchQuery.toLowerCase()))
+    );
 
     return (
         <div className="space-y-8 pb-12">
@@ -135,6 +180,115 @@ export default function DashboardOverview() {
                     })}
                 </div>
             </motion.div>
+
+            {isAdmin && (
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.4, delay: 0.3 }}
+                    className="bg-card border border-border p-6 rounded-3xl shadow-lg"
+                >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center border border-primary/20">
+                                <Users className="w-5 h-5 text-primary" />
+                            </div>
+                            <div>
+                                <h3 className="font-semibold text-foreground">Registered Users</h3>
+                                <p className="text-xs text-muted-foreground uppercase tracking-widest font-mono">System Directory</p>
+                            </div>
+                        </div>
+
+                        <div className="relative w-full sm:w-64">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                            <input
+                                type="text"
+                                placeholder="Search users..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="w-full h-10 bg-background border border-border rounded-xl pl-9 pr-4 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all font-mono"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="overflow-x-auto rounded-xl border border-border bg-background">
+                        {isLoadingUsers ? (
+                            <div className="flex justify-center p-8">
+                                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                            </div>
+                        ) : (
+                            <table className="w-full text-sm text-left">
+                                <thead className="text-xs uppercase bg-muted/30 text-muted-foreground font-mono border-b border-border">
+                                    <tr>
+                                        <th className="px-6 py-4 font-medium tracking-wider">ID</th>
+                                        <th className="px-6 py-4 font-medium tracking-wider">Username</th>
+                                        <th className="px-6 py-4 font-medium tracking-wider">Email</th>
+                                        <th className="px-6 py-4 font-medium tracking-wider">Roles</th>
+                                        <th className="px-6 py-4 font-medium tracking-wider">Status</th>
+                                        <th className="px-6 py-4 font-medium tracking-wider text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-border/50">
+                                    {filteredUsers.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={5} className="px-6 py-8 text-center text-muted-foreground font-mono">
+                                                No users found.
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        filteredUsers.map((u) => (
+                                            <tr key={u.id} className="hover:bg-muted/10 transition-colors font-mono text-xs">
+                                                <td className="px-6 py-4 whitespace-nowrap opacity-70">
+                                                    {u.id}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap font-bold text-foreground">
+                                                    {u.username}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-muted-foreground">
+                                                    {u.email}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <div className="flex gap-1 flex-wrap">
+                                                        {(u.roles || []).map((r: any) => {
+                                                            const rName = typeof r === 'object' ? r.name : r;
+                                                            return (
+                                                                <span key={rName} className="px-2 py-0.5 bg-primary/10 text-primary border border-primary/20 rounded font-bold uppercase text-[10px]">
+                                                                    {rName.replace('ROLE_', '')}
+                                                                </span>
+                                                            )
+                                                        })}
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    {u.active ? (
+                                                        <span className="px-2 py-1 bg-success/10 text-success border border-success/20 rounded font-mono text-[10px] uppercase font-bold">Active</span>
+                                                    ) : (
+                                                        <span className="px-2 py-1 bg-destructive/10 text-destructive border border-destructive/20 rounded font-mono text-[10px] uppercase font-bold">Inactive</span>
+                                                    )}
+                                                    {u.accountLocked && (
+                                                        <span className="ml-2 px-2 py-1 bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 rounded font-mono text-[10px] uppercase font-bold">Locked</span>
+                                                    )}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-right">
+                                                    <button
+                                                        onClick={() => handleToggleLock(u.id, u.accountLocked)}
+                                                        className={`px-3 py-1.5 rounded font-mono text-xs uppercase font-bold transition-all border ${u.accountLocked
+                                                            ? 'bg-success/10 text-success border-success/30 hover:bg-success/20'
+                                                            : 'bg-destructive/10 text-destructive border-destructive/30 hover:bg-destructive/20'
+                                                            }`}
+                                                    >
+                                                        {u.accountLocked ? 'Unlock' : 'Lock'}
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        )}
+                    </div>
+                </motion.div>
+            )}
         </div>
     );
 }
