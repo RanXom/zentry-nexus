@@ -117,6 +117,7 @@ export const useAuth = create<AuthState>()(
             // For this high security terminal, let's keep it in memory & use refresh token on mount.
             partialize: (state) => ({
                 user: state.user,
+                accessToken: state.accessToken,
                 isAuthenticated: state.isAuthenticated
             }),
         }

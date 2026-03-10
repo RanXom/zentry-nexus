@@ -8,12 +8,12 @@ import { motion } from 'framer-motion';
 import { Database, Loader2, RefreshCw, AlertCircle } from 'lucide-react';
 
 interface AuditLog {
-    id: string;
-    action: string;
-    userId: string;
-    timestamp: string;
-    status: 'SUCCESS' | 'REVOKED' | 'FAILED' | 'LOGIN_SUCCESS' | 'WARNING';
-    details: string;
+    id: number;
+    actionType: string;
+    actorId: number | null;
+    createdAt: string;
+    details: any;
+    ipAddress: string;
 }
 
 export default function AuditLedgerPage() {
@@ -27,7 +27,7 @@ export default function AuditLedgerPage() {
         setIsLoading(true);
         setError(null);
         try {
-            const res = await apiClient.get('/audit/logs');
+            const res = await apiClient.get('/admin/logs');
             setLogs(res.data || []);
         } catch (e: any) {
             setError(e.response?.data?.message || 'Failed to retrieve forensic ledger');
@@ -50,18 +50,18 @@ export default function AuditLedgerPage() {
         fetchLogs();
     }, [user, router, fetchLogs]);
 
-    const getStatusBadge = (status: AuditLog['status']) => {
-        switch (status) {
-            case 'SUCCESS':
-            case 'LOGIN_SUCCESS':
+    const getStatusBadge = (actionType: string) => {
+        switch (actionType) {
+            case 'IDENTITY_AUTHENTICATED':
+            case 'IDENTITY_REGISTERED':
                 return <span className="px-2 py-1 bg-success/10 text-success border border-success/20 rounded font-mono text-xs uppercase font-bold">SUCCESS</span>;
-            case 'REVOKED':
-            case 'FAILED':
+            case 'IDENTITY_REVOKED':
+            case 'IDENTITY_LOCKED':
                 return <span className="px-2 py-1 bg-destructive/10 text-destructive border border-destructive/20 rounded font-mono text-xs uppercase font-bold">REVOKED</span>;
-            case 'WARNING':
-                return <span className="px-2 py-1 bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 rounded font-mono text-xs uppercase font-bold">WARNING</span>;
+            case 'ADMIN_VIEWED_AUDIT_LOGS':
+                return <span className="px-2 py-1 bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 rounded font-mono text-xs uppercase font-bold">AUDIT</span>;
             default:
-                return <span className="px-2 py-1 bg-muted/20 text-muted-foreground border border-border rounded font-mono text-xs uppercase font-bold">{status}</span>;
+                return <span className="px-2 py-1 bg-muted/20 text-muted-foreground border border-border rounded font-mono text-xs uppercase font-bold">{actionType}</span>;
         }
     };
 
@@ -119,6 +119,7 @@ export default function AuditLedgerPage() {
                                     <th className="px-6 py-4 font-medium tracking-wider">Event ID</th>
                                     <th className="px-6 py-4 font-medium tracking-wider">Action</th>
                                     <th className="px-6 py-4 font-medium tracking-wider">Identity</th>
+                                    <th className="px-6 py-4 font-medium tracking-wider">IP Address</th>
                                     <th className="px-6 py-4 font-medium tracking-wider">Status</th>
                                 </tr>
                             </thead>
@@ -133,19 +134,22 @@ export default function AuditLedgerPage() {
                                     logs.map((log) => (
                                         <tr key={log.id} className="hover:bg-muted/10 transition-colors font-mono text-xs">
                                             <td className="px-6 py-4 whitespace-nowrap text-muted-foreground">
-                                                {new Date(log.timestamp).toLocaleString()}
+                                                {new Date(log.createdAt).toLocaleString()}
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap opacity-70">
                                                 {log.id}
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap font-bold text-foreground">
-                                                {log.action}
+                                                {log.actionType}
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-primary">
-                                                {log.userId}
+                                                {log.actorId || 'SYSTEM'}
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-muted-foreground">
+                                                {log.ipAddress}
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
-                                                {getStatusBadge(log.status)}
+                                                {getStatusBadge(log.actionType)}
                                             </td>
                                         </tr>
                                     ))
